@@ -6,8 +6,6 @@ services:
       POSTGRES_USER: ${DB_USER:?DB_USER is required}
       POSTGRES_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD is required}
       POSTGRES_DB: ${DB_NAME:?DB_NAME is required}
-    ports:
-      - "5432:5432"
     volumes:
       # Named volume: database data persists across container restarts/recreation.
       - pgdata:/var/lib/postgresql/data
