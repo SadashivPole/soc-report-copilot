@@ -1,0 +1,55 @@
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: soc
+      POSTGRES_PASSWORD: socpass
+      POSTGRES_DB: soc_copilot
+    ports:
+      - "5432:5432"
+    volumes:
+      # Named volume: database data persists across container restarts/recreation.
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U soc -d soc_copilot"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  api:
+    build: ./backend
+    restart: unless-stopped
+    depends_on:
+      db:
+        # API only starts once Postgres reports healthy; it also retries on boot.
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      DATABASE_URL: postgres://soc:socpass@db:5432/soc_copilot
+      # CHANGE THESE — production refuses to start with a default/short secret
+      # or a wildcard/empty CORS origin.
+      JWT_SECRET: please-change-this-to-a-long-random-string-32c+
+      JWT_EXPIRES_IN: 12h
+      # Explicit allow-list of browser origins (comma-separated). No wildcard in prod.
+      CORS_ORIGIN: "http://localhost:3000"
+      DEFAULT_PLAN: pro
+      ANALYSIS_PROVIDER: deterministic
+      SCHEDULER_ENABLED: "true"
+      RETENTION_ENABLED: "true"
+      # Optional real email delivery for scheduled reports:
+      # SMTP_URL: smtp://user:pass@smtp.example.com:587
+      # MAIL_FROM: "SOC Report Copilot <no-reply@yourdomain.com>"
+    ports:
+      - "3000:3000"
+    healthcheck:
+      # Readiness endpoint returns 503 when the database is unreachable.
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3000/api/health | grep -q '\"status\":\"ok\"'"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
+volumes:
+  pgdata:

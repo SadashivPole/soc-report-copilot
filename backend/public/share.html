@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Shared SOC Report</title>
+<style>
+  :root{--bg:#0a0e1a;--panel:#131b30;--bg2:#0e1424;--ink:#eaf0fb;--muted:#93a1bd;--line:#243352;--accent:#5b8cff;--accent2:#2dd4bf;
+    --crit:#ef4444;--high:#f97316;--med:#eab308;--low:#22c55e;}
+  *{box-sizing:border-box}
+  body{margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;background:var(--bg);color:var(--ink);line-height:1.5}
+  .bar{background:var(--panel);border-bottom:1px solid var(--line);padding:14px 24px;display:flex;justify-content:space-between;align-items:center}
+  .brand{display:flex;gap:10px;align-items:center;font-weight:800}
+  .logo{width:30px;height:30px;border-radius:8px;background:linear-gradient(135deg,var(--accent),var(--accent2));display:grid;place-items:center}
+  .wrap{max-width:1000px;margin:0 auto;padding:22px}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:18px;margin-bottom:14px}
+  .badge{display:inline-block;background:#16223f;color:#9db8ff;border:1px solid #294270;border-radius:999px;padding:3px 11px;font-size:11px;font-weight:700}
+  .badge.exec{background:#12261f;color:#7ee0c0;border-color:#1f5a45}
+  .badge.analyst{background:#2a1830;color:#e0a7ff;border-color:#5a2f6e}
+  .btn{background:var(--accent);color:#fff;border:0;border-radius:9px;padding:9px 15px;font-weight:650;cursor:pointer;text-decoration:none;font-size:14px}
+  h2{margin:0 0 4px;font-size:18px}h3{margin:16px 0 8px;font-size:14px;color:#cdd7ee}
+  table{width:100%;border-collapse:collapse;font-size:13px}th,td{text-align:left;padding:8px 10px;border-bottom:1px solid var(--line)}
+  th{color:var(--muted);font-size:11px;text-transform:uppercase}
+  .kpi{display:inline-block;background:var(--bg2);border:1px solid var(--line);border-radius:10px;padding:10px 14px;margin:4px}
+  .kpi .n{font-size:22px;font-weight:800}.kpi .l{font-size:11px;color:var(--muted)}
+  .sev-crit{color:var(--crit)}.sev-high{color:var(--high)}.sev-med{color:var(--med)}.sev-low{color:var(--low)}
+  .finding{background:var(--bg2);border:1px solid var(--line);border-radius:9px;padding:11px;margin-bottom:9px}
+  .evidence{font-family:ui-monospace,monospace;font-size:11px;color:var(--accent2);word-break:break-all}
+  .muted{color:var(--muted)} .row{display:flex;gap:16px;flex-wrap:wrap}.split{flex:1;min-width:260px}
+  .note{text-align:center;padding:60px 20px;color:var(--muted)}
+  .posture{font-size:20px;font-weight:800;margin:4px 0}
+</style>
+</head>
+<body>
+<div class="bar">
+  <div class="brand"><div class="logo">🛡️</div> SOC Report Copilot</div>
+  <span class="badge" id="modeBadge">Read-only shared report</span>
+</div>
+<div class="wrap" id="root"><div class="note">Loading…</div></div>
+<script>
+(function(){
+  const token = location.pathname.split('/share/')[1];
+  const root = document.getElementById('root');
+  const modeBadge = document.getElementById('modeBadge');
+  function el(t,p={},...k){const n=document.createElement(t);for(const[a,v]of Object.entries(p)){if(v==null)continue;if(a==='class')n.className=v;else if(a==='text')n.textContent=v;else n.setAttribute(a,v);}k.forEach(c=>{if(c==null)return;n.appendChild(typeof c==='string'?document.createTextNode(c):c);});return n;}
+  const dstr=d=>d?new Date(d).toISOString().slice(0,10):'n/a';
+  const sevC=s=>({Critical:'sev-crit',High:'sev-high',Medium:'sev-med',Low:'sev-low'}[s]||'');
+  function topTable(title,rows){const b=el('tbody');(rows||[]).slice(0,8).forEach(r=>b.appendChild(el('tr',{},el('td',{text:String(r.key)}),el('td',{text:String(r.count)}))));if(!rows||!rows.length)b.appendChild(el('tr',{},el('td',{colspan:'2',class:'muted',text:'None'})));return el('div',{class:'split'},el('h3',{text:title}),el('table',{},el('thead',{},el('tr',{},el('th',{text:'Item'}),el('th',{text:'Count'}))),b));}
+  function ev(ids){return el('div',{class:'evidence',text:'Evidence event IDs: '+((ids&&ids.length)?ids.slice(0,12).join(', '):'n/a')});}
+  function kpis(total,severity){const box=el('div',{},el('span',{class:'kpi'},el('div',{class:'n',text:String(total||0)}),el('div',{class:'l',text:'Total'})));['Critical','High','Medium','Low'].forEach(s=>box.appendChild(el('span',{class:'kpi'},el('div',{class:'n '+sevC(s),text:String((severity&&severity[s])||0)}),el('div',{class:'l',text:s}))));return box;}
+
+  function renderExecutive(d, token, expires_at){
+    root.appendChild(el('div',{class:'card'},
+      el('div',{style:'display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px'},
+        el('div',{},el('h2',{text:(d.title||'SOC Report')+(d.client_name?' — '+d.client_name:'')}),
+          el('div',{class:'muted',text:`${dstr(d.period_start)} → ${dstr(d.period_end)} · ${(d.kpis&&d.kpis.total)||0} alerts · link expires ${new Date(expires_at).toLocaleString()}`})),
+        el('a',{class:'btn',href:'/api/share/'+encodeURIComponent(token)+'/pdf'},'⬇ Download PDF'))));
+
+    const pc=el('div',{class:'card'});
+    if(d.posture)pc.appendChild(el('div',{},el('div',{class:'muted',text:'Overall security posture'}),el('div',{class:'posture',text:d.posture.label||d.posture.level||'n/a'}),el('div',{class:'muted',style:'font-size:12px',text:d.posture.rationale||''})));
+    pc.appendChild(el('h3',{text:'Alerts'}));
+    pc.appendChild(kpis(d.kpis&&d.kpis.total,d.kpis&&d.kpis.severity));
+    root.appendChild(pc);
+
+    const es=d.executive_summary||{};
+    const sc=el('div',{class:'card'},el('h3',{text:'Executive summary'}));
+    if(es.headline)sc.appendChild(el('p',{text:es.headline}));
+    if(es.key_stats&&es.key_stats.length){const ul=el('ul');es.key_stats.forEach(s=>ul.appendChild(el('li',{text:s})));sc.appendChild(ul);}
+    if(es.major_observations&&es.major_observations.length){sc.appendChild(el('h3',{text:'What management should know'}));const ul=el('ul');es.major_observations.forEach(s=>ul.appendChild(el('li',{text:s})));sc.appendChild(ul);}
+    root.appendChild(sc);
+
+    if(es.priority_actions&&es.priority_actions.length){
+      const ac=el('div',{class:'card'},el('h3',{text:'Priority recommended actions'}));
+      es.priority_actions.forEach(a=>ac.appendChild(el('div',{class:'finding'},el('div',{},el('b',{text:(a.priority?('['+a.priority+'] '):'')+(a.finding||'')}),' ',el('span',{class:sevC(a.severity),text:a.severity?('· '+a.severity):''})),el('div',{class:'muted',style:'font-size:13px',text:a.recommended_action||''}),el('div',{class:'muted',style:'font-size:12px',text:(a.owner?('Owner: '+a.owner):'')+(a.label?('  ·  '+a.label):'')}))));
+      root.appendChild(ac);
+    }
+
+    const cmp=d.comparison;
+    if(cmp){const cc=el('div',{class:'card'},el('h3',{text:'Historical comparison'}));cc.appendChild(el('p',{class:'muted',text:cmp.note||(cmp.available?'':'Historical comparison unavailable.')}));root.appendChild(cc);}
+
+    const mc=el('div',{class:'card'},el('h3',{text:'MITRE ATT&CK overview'}));
+    if(d.mitre_note)mc.appendChild(el('p',{class:'muted',text:d.mitre_note}));
+    (d.mitre_overview||[]).forEach(m=>mc.appendChild(el('div',{class:'finding'},el('b',{text:m.technique_id+(m.technique_name?' — '+m.technique_name:'')}),' ',el('span',{class:'muted',text:`${m.tactic||''} · ${m.alert_count} alerts · ${m.confidence||''}`}))));
+    root.appendChild(mc);
+
+    root.appendChild(el('div',{class:'card muted',style:'font-size:12px'},d.disclosure_note||'Executive view — technical detail omitted.'));
+  }
+
+  function renderAnalyst(d, token, expires_at){
+    root.appendChild(el('div',{class:'card'},
+      el('div',{style:'display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px'},
+        el('div',{},el('h2',{text:d.title+(d.client_name?' — '+d.client_name:'')}),
+          el('div',{class:'muted',text:`${dstr(d.period_start)} → ${dstr(d.period_end)} · ${d.dashboard.totals.total} alerts · link expires ${new Date(expires_at).toLocaleString()}`})),
+        el('a',{class:'btn',href:'/api/share/'+encodeURIComponent(token)+'/pdf'},'⬇ Download PDF'))));
+
+    root.appendChild(el('div',{class:'card'},el('h3',{text:'Overview'}),kpis(d.dashboard.totals.total,d.dashboard.severity)));
+    root.appendChild(el('div',{class:'card'},el('div',{class:'row'},topTable('Top alert types',d.dashboard.top_alert_types),topTable('Top source IPs',d.dashboard.top_source_ips))));
+    root.appendChild(el('div',{class:'card'},el('div',{class:'row'},topTable('Top users',d.dashboard.top_users),topTable('Top hosts',d.dashboard.top_hosts))));
+
+    const ai=d.ai_analysis;
+    const aic=el('div',{class:'card'},el('span',{class:'badge',text:ai.label+' · '+ai.provider}),el('h3',{text:'Analyst-assist summary'}),el('p',{text:ai.summary}),el('p',{class:'muted',style:'font-size:12px',text:ai.disclaimer}));
+    const ul=el('ul');(ai.key_observations||[]).forEach(o=>ul.appendChild(el('li',{text:o})));aic.appendChild(el('h3',{text:'Key observations'}));aic.appendChild(ul);root.appendChild(aic);
+
+    const rc=el('div',{class:'card'},el('h3',{text:'Recurring patterns (evidence-cited)'}));
+    if(!ai.recurring_patterns.length)rc.appendChild(el('p',{class:'muted',text:'None met threshold.'}));
+    ai.recurring_patterns.forEach(p=>rc.appendChild(el('div',{class:'finding'},el('div',{},el('b',{text:p.pattern}),' ',el('span',{class:sevC(p.severity),text:`[${p.severity} · ${p.alert_count}]`})),ev(p.evidence_event_ids))));root.appendChild(rc);
+
+    const fp=el('div',{class:'card'},el('h3',{text:'False-positive / tuning candidates'}),el('p',{class:'muted',style:'font-size:12px',text:'Candidates for analyst review — NOT determinations.'}));
+    if(!ai.false_positive_candidates.length)fp.appendChild(el('p',{class:'muted',text:'None flagged.'}));
+    ai.false_positive_candidates.forEach(f=>fp.appendChild(el('div',{class:'finding'},el('b',{text:f.rule}),el('div',{class:'muted',style:'font-size:12px',text:f.reason}),ev(f.evidence_event_ids))));root.appendChild(fp);
+
+    const m=d.mitre_attack;const mc=el('div',{class:'card'},el('h3',{text:'MITRE ATT&CK mapping (evidence-gated)'}));
+    if(m.note)mc.appendChild(el('p',{class:'muted',text:m.note}));
+    m.mappings.forEach(mp=>mc.appendChild(el('div',{class:'finding'},el('b',{text:mp.technique_id+(mp.technique_name?' — '+mp.technique_name:'')}),' ',el('span',{class:'muted',text:`${mp.alert_count} alerts · ${mp.confidence} · ${mp.evidence_source}`}),ev(mp.evidence_event_ids))));root.appendChild(mc);
+  }
+
+  fetch('/api/share/'+encodeURIComponent(token)).then(async r=>{
+    if(!r.ok){const e=await r.json().catch(()=>({error:'Unavailable'}));root.textContent='';root.appendChild(el('div',{class:'note',text:e.error||'This link is not available.'}));return;}
+    const resp=await r.json();const d=resp.report.data;const mode=resp.mode||(d&&d.view)||'analyst';
+    root.textContent='';
+    if(mode==='executive'){modeBadge.className='badge exec';modeBadge.textContent='Executive view · management';renderExecutive(d,token,resp.expires_at);}
+    else{modeBadge.className='badge analyst';modeBadge.textContent='Analyst view · full technical detail';renderAnalyst(d,token,resp.expires_at);}
+  }).catch(()=>{root.textContent='';root.appendChild(el('div',{class:'note',text:'This link is not available.'}));});
+})();
+</script>
+</body>
+</html>
