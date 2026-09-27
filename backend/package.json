@@ -8,7 +8,7 @@
     "start": "node src/index.js",
     "migrate": "node src/db/migrate.js",
     "seed": "node seed/generate.js",
-    "test": "node --test tests/"
+    "test": "node --test --test-concurrency=1 tests/*.test.js"
   },
   "engines": { "node": ">=20" },
   "dependencies": {
